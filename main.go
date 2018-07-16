@@ -21,7 +21,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 )
 
-const version = "0.0.2"
+const version = "0.0.3"
 
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
@@ -85,7 +85,7 @@ func main() {
 				time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
 				utils.Restart()
 			}
-			// log.Printf("recv: %s", message)
+			log.Printf("recv: %s", message)
 			var action = new(Action)
 			err = json.Unmarshal(message, &action)
 			if err != nil {
@@ -134,6 +134,7 @@ func main() {
 		for {
 			select {
 			case res := <-results:
+				log.Printf("recv: %s", res)
 				var action Action
 				err := json.Unmarshal([]byte(res), &action)
 				if err != nil {
