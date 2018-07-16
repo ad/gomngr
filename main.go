@@ -43,6 +43,12 @@ type Action struct {
 	UUID       string `json:"uuid"`
 }
 
+type Task struct {
+	ZondUUID string `json:"zond"`
+	Created  int64  `json:"created"`
+	UUID     string `json:"uuid"`
+}
+
 func main() {
 	log.Printf("Started version %s", version)
 
@@ -165,10 +171,7 @@ func post(url string, jsonData string) string {
 
 func processTask(action *Action) {
 	// 2. Find the correct number of zonds with the same destination parameter as in main task
-
-	// 3. Create a subtask for each zond (+ set uuid of the main task)
-
-	// 4. Send posts to pubsub with task metadata
+	var tasks []Task
 
 	// 5. Wait for a while (timeout/deadline from the main task)
 	results := make(chan string, 1)
@@ -180,6 +183,30 @@ func processTask(action *Action) {
 		// finishTask(action)
 	case <-time.After(time.Duration(action.TimeOut) * time.Second):
 		finishTask(action)
+	}
+
+	// 3. Create a subtask for each zond (+ set uuid of the main task)
+	for _, task := range tasks {
+		u, _ := uuid.NewV4()
+		var Uuid = u.String()
+		var msec = time.Now().Unix()
+
+		newAction := Action{
+			Action:     action.Action,
+			ZondUUID:   task.ZondUUID,
+			MngrUUID:   *mngruuid,
+			Creator:    action.Creator,
+			Type:       "task",
+			Param:      action.Param,
+			ParentUUID: action.UUID,
+			Created:    msec,
+			UUID:       Uuid,
+		}
+		js, _ := json.Marshal(newAction)
+		// TODO: put task to redis
+
+		// 4. Send posts to pubsub with task metadata
+		go post("http://127.0.0.1:80/pub/zond:"+task.ZondUUID, string(js))
 	}
 }
 
