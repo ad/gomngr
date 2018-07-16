@@ -12,10 +12,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"./selfupdate"
 	"./utils"
+	"github.com/ad/gocc/ccredis"
 	"github.com/gorilla/websocket"
 	"github.com/nu7hatch/gouuid"
 )
@@ -25,6 +27,8 @@ const version = "0.0.2"
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
 var mngruuid = flag.String("uuid", mu.String(), "manager uuid")
+
+var results = make(chan string, 1)
 
 type Action struct {
 	ZondUUID   string `json:"zond"`
@@ -92,31 +96,59 @@ func main() {
 				}
 
 				if action.Type == "measurement" {
-					// TODO:
-					// 1. Block task
-					var postAction = Action{MngrUUID: *mngruuid, Action: "block", Result: "", UUID: action.UUID}
-					var js, _ = json.Marshal(postAction)
-					var status = post("http://"+*addr+"/mngr/task/block", string(js))
-
-					if status != `{"status": "ok", "message": "ok"}` {
-						if status != `{"status": "error", "message": "task not found"}` {
-							log.Println(action.UUID, status)
-						}
+					if action.Result != "" {
+						// send result to results channel
+						results <- string(message)
 					} else {
-						// 2. Find the correct number of zonds with the same destination parameter as in main task
-						// 3. Create a subtask for each zond (+ set uuid of the main task)
-						// 4. Send posts to pubsub with task metadata
-						// 5. Wait for a while (timeout/deadline from the main task)
-						// 6. Delete / Hide / Mark Unfinished Jobs
-						// 7. Make a calculation with data from the completed tasks
-						// 8. Write the result to the main task
-						go processTask(action)
+						// 1. Block task
+						var postAction = Action{MngrUUID: *mngruuid, Action: "block", Result: "", UUID: action.UUID}
+						var js, _ = json.Marshal(postAction)
+						var status = post("http://"+*addr+"/mngr/task/block", string(js))
+
+						if status != `{"status": "ok", "message": "ok"}` {
+							if status != `{"status": "error", "message": "task not found"}` {
+								log.Println(action.UUID, status)
+							}
+						} else {
+							// 2. Find the correct number of zonds with the same destination parameter as in main task
+							// 3. Create a subtask for each zond (+ set uuid of the main task)
+							// 4. Send posts to pubsub with task metadata
+							// 5. Wait for a while (timeout/deadline from the main task)
+							// 6. Delete / Hide / Mark Unfinished Jobs
+							// 7. Make a calculation with data from the completed tasks
+							// 8. Write the result to the main task
+							go processTask(action)
+						}
 					}
 				} else if action.Action == "alive" {
 					ccAddr := *addr
 					action.MngrUUID = *mngruuid
 					js, _ := json.Marshal(action)
 					post("http://"+ccAddr+"/mngr/pong", string(js))
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case res := <-results:
+				var action Action
+				err := json.Unmarshal([]byte(res), &action)
+				if err != nil {
+					log.Println(err.Error())
+				}
+
+				taskjson, _ := ccredis.Client.Get("task/" + action.ParentUUID).Result()
+				var task Action
+				err = json.Unmarshal([]byte(taskjson), &task)
+				if err != nil {
+					log.Println(err.Error())
+				}
+				if task.Result != "" {
+					// if all subtasks finished — call finishTask
+					finishTask(&action)
 				}
 			}
 		}
@@ -170,17 +202,12 @@ func post(url string, jsonData string) string {
 }
 
 func processTask(action *Action) {
+	// TODO:
 	// 2. Find the correct number of zonds with the same destination parameter as in main task
 	var tasks []Task
 
 	// 5. Wait for a while (timeout/deadline from the main task)
-	results := make(chan string, 1)
 	select {
-	case res := <-results:
-		fmt.Println(res)
-		// TODO: check if subtasks finished
-		// if all subtasks finished — call finishTask
-		// finishTask(action)
 	case <-time.After(time.Duration(action.TimeOut) * time.Second):
 		finishTask(action)
 	}
@@ -203,7 +230,10 @@ func processTask(action *Action) {
 			UUID:       Uuid,
 		}
 		js, _ := json.Marshal(newAction)
-		// TODO: put task to redis
+
+		ccredis.Client.SAdd("tasks-new", Uuid)
+		ccredis.Client.SAdd("tasks/measurement/"+action.UUID, Uuid)
+		ccredis.Client.Set("task/"+Uuid, string(js), time.Duration(action.TimeOut+300)) // subtask ttl is 5 minutes
 
 		// 4. Send posts to pubsub with task metadata
 		go post("http://127.0.0.1:80/pub/zond:"+task.ZondUUID, string(js))
@@ -211,15 +241,41 @@ func processTask(action *Action) {
 }
 
 func finishTask(action *Action) {
-	// TODO: check if task already finished
+	// check if task already finished
+	taskjson, _ := ccredis.Client.Get("task/" + action.UUID).Result()
+	var task Action
+	err := json.Unmarshal([]byte(taskjson), &task)
+	if err != nil {
+		log.Println(err.Error())
+	}
+	if task.Result != "" {
+		return
+	}
 
+	// TODO:
 	// 6. Delete / Hide / Mark Unfinished Jobs
 
 	// 7. Make a calculation with data from the completed tasks
+	var result = 0
+	tasks, _ := ccredis.Client.SMembers("tasks/measurement/" + action.UUID).Result()
+	if len(tasks) > 0 {
+		for _, taskUuid := range tasks {
+			tp, _ := ccredis.Client.Get("task/" + taskUuid).Result()
+			var subtask Action
+			err := json.Unmarshal([]byte(tp), &subtask)
+			if err != nil {
+				log.Println(err.Error())
+			} else if subtask.Result != "" {
+				// TODO
+				// make calculation
+				result++
+			}
+		}
+	}
 
 	// 8. Write the result to the main task
-	resultAction := Action{MngrUUID: *mngruuid, Action: "result", Result: "result info", UUID: action.UUID}
-	js, _ := json.Marshal(resultAction)
+	resultAction := Action{MngrUUID: *mngruuid, Action: "result", Result: strconv.Itoa(result), UUID: action.UUID}
+	resultjson, _ := json.Marshal(resultAction)
 
-	post("http://"+*addr+"/mngr/task/result", string(js))
+	post("http://"+*addr+"/mngr/task/result", string(resultjson))
 }
