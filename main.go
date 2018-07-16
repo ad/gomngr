@@ -31,6 +31,7 @@ type Action struct {
 	MngrUUID   string `json:"manager"`
 	Creator    string `json:"creator"`
 	Type       string `json:"type"`
+	TimeOut    int64  `json:"timeout"`
 	Action     string `json:"action"`
 	Param      string `json:"param"`
 	Result     string `json:"result"`
@@ -150,24 +151,48 @@ func post(url string, jsonData string) string {
 	if err != nil {
 		log.Println(err)
 		return "error"
+	}
+
+	if resp.StatusCode == 429 {
+		log.Printf("%s: %d", url, resp.StatusCode)
+		time.Sleep(time.Duration(rand.Intn(30)) * time.Second)
+		return post(url, jsonData)
 	} else {
-		if resp.StatusCode == 429 {
-			log.Printf("%s: %d", url, resp.StatusCode)
-			time.Sleep(time.Duration(rand.Intn(30)) * time.Second)
-			return post(url, jsonData)
-		} else {
-			body, _ := ioutil.ReadAll(resp.Body)
-			return string(body)
-		}
+		body, _ := ioutil.ReadAll(resp.Body)
+		return string(body)
 	}
 }
 
 func processTask(action *Action) {
 	// 2. Find the correct number of zonds with the same destination parameter as in main task
+
 	// 3. Create a subtask for each zond (+ set uuid of the main task)
+
 	// 4. Send posts to pubsub with task metadata
+
 	// 5. Wait for a while (timeout/deadline from the main task)
+	results := make(chan string, 1)
+	select {
+	case res := <-results:
+		fmt.Println(res)
+		// TODO: check if subtasks finished
+		// if all subtasks finished — call finishTask
+		// finishTask(action)
+	case <-time.After(time.Duration(action.TimeOut) * time.Second):
+		finishTask(action)
+	}
+}
+
+func finishTask(action *Action) {
+	// TODO: check if task already finished
+
 	// 6. Delete / Hide / Mark Unfinished Jobs
+
 	// 7. Make a calculation with data from the completed tasks
+
 	// 8. Write the result to the main task
+	resultAction := Action{MngrUUID: *mngruuid, Action: "result", Result: "result info", UUID: action.UUID}
+	js, _ := json.Marshal(resultAction)
+
+	post("http://"+*addr+"/mngr/task/result", string(js))
 }
