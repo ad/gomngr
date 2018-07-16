@@ -2,13 +2,11 @@ package selfupdate
 
 import (
 	"fmt"
-	"log"
 	"os"
-	"syscall"
 	"time"
 
+	"../utils"
 	"github.com/blang/semver"
-	"github.com/kardianos/osext"
 	"github.com/rhysd/go-github-selfupdate/selfupdate"
 )
 
@@ -38,14 +36,7 @@ func selfUpdate(slug string, version string) error {
 		fmt.Println("Update successfully done to version", latest.Version)
 		// fmt.Println("Release note:\n", latest.ReleaseNotes)
 
-		file, err := osext.Executable()
-		if err != nil {
-			return err
-		}
-		err = syscall.Exec(file, os.Args, os.Environ())
-		if err != nil {
-			log.Fatal(err)
-		}
+		utils.Restart()
 	}
 
 	return nil

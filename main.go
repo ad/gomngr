@@ -12,12 +12,10 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
-	"github.com/kardianos/osext"
-
 	"./selfupdate"
+	"./utils"
 	"github.com/gorilla/websocket"
 	"github.com/nu7hatch/gouuid"
 )
@@ -74,7 +72,7 @@ func main() {
 			if err != nil {
 				log.Println("read:", err)
 				time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
-				restart()
+				utils.Restart()
 			}
 			// log.Printf("recv: %s", message)
 			var action = new(Action)
@@ -89,8 +87,8 @@ func main() {
 				if action.Type == "measurement" {
 					// TODO:
 					// 1. Block task
-					var action = Action{MngrUUID: *mngruuid, Action: "block", Result: "", UUID: action.UUID}
-					var js, _ = json.Marshal(action)
+					var postAction = Action{MngrUUID: *mngruuid, Action: "block", Result: "", UUID: action.UUID}
+					var js, _ = json.Marshal(postAction)
 					var status = post("http://"+*addr+"/mngr/task/block", string(js))
 
 					if status != `{"status": "ok", "message": "ok"}` {
@@ -105,6 +103,7 @@ func main() {
 						// 6. Delete / Hide / Mark Unfinished Jobs
 						// 7. Make a calculation with data from the completed tasks
 						// 8. Write the result to the main task
+						go processTask(action)
 					}
 				} else if action.Action == "alive" {
 					ccAddr := *addr
@@ -136,18 +135,6 @@ func main() {
 	}
 }
 
-func restart() {
-	file, err := osext.Executable()
-	if err != nil {
-		log.Println("restart:", err)
-	} else {
-		err = syscall.Exec(file, os.Args, os.Environ())
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-}
-
 func post(url string, jsonData string) string {
 	var jsonStr = []byte(jsonData)
 
@@ -173,4 +160,14 @@ func post(url string, jsonData string) string {
 			return string(body)
 		}
 	}
+}
+
+func processTask(action *Action) {
+	// 2. Find the correct number of zonds with the same destination parameter as in main task
+	// 3. Create a subtask for each zond (+ set uuid of the main task)
+	// 4. Send posts to pubsub with task metadata
+	// 5. Wait for a while (timeout/deadline from the main task)
+	// 6. Delete / Hide / Mark Unfinished Jobs
+	// 7. Make a calculation with data from the completed tasks
+	// 8. Write the result to the main task
 }
