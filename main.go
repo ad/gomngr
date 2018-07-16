@@ -14,8 +14,8 @@ import (
 	"os/signal"
 	"time"
 
-	"./selfupdate"
-	"./utils"
+	"github.com/ad/gomngr/selfupdate"
+	"github.com/ad/gomngr/utils"
 	"github.com/ad/gocc/ccredis"
 	"github.com/gorilla/websocket"
 	"github.com/nu7hatch/gouuid"
