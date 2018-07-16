@@ -22,7 +22,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 )
 
-const version = "0.0.1"
+const version = "0.0.2"
 
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
@@ -88,14 +88,24 @@ func main() {
 
 				if action.Type == "measurement" {
 					// TODO:
-					// Block task
-					// Find the correct number of zonds with the same destination parameter as in main task
-					// Create a subtask for each zond (+ set uuid of the main task)
-					// Send posts to pubsub with task metadata
-					// Wait for a while (timeout/deadline from the main task)
-					// Delete / Hide / Mark Unfinished Jobs
-					// Make a calculation with data from the completed tasks
-					// Write the result to the main task
+					// 1. Block task
+					var action = Action{MngrUUID: *mngruuid, Action: "block", Result: "", UUID: action.UUID}
+					var js, _ = json.Marshal(action)
+					var status = post("http://"+*addr+"/mngr/task/block", string(js))
+
+					if status != `{"status": "ok", "message": "ok"}` {
+						if status != `{"status": "error", "message": "task not found"}` {
+							log.Println(action.UUID, status)
+						}
+					} else {
+						// 2. Find the correct number of zonds with the same destination parameter as in main task
+						// 3. Create a subtask for each zond (+ set uuid of the main task)
+						// 4. Send posts to pubsub with task metadata
+						// 5. Wait for a while (timeout/deadline from the main task)
+						// 6. Delete / Hide / Mark Unfinished Jobs
+						// 7. Make a calculation with data from the completed tasks
+						// 8. Write the result to the main task
+					}
 				} else if action.Action == "alive" {
 					ccAddr := *addr
 					action.MngrUUID = *mngruuid
