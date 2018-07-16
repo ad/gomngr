@@ -35,6 +35,7 @@ type Action struct {
 	MngrUUID   string `json:"manager"`
 	Creator    string `json:"creator"`
 	Type       string `json:"type"`
+	Count      int64  `json:"count"`
 	TimeOut    int64  `json:"timeout"`
 	Action     string `json:"action"`
 	Param      string `json:"param"`
@@ -195,16 +196,24 @@ func post(url string, jsonData string) string {
 		log.Printf("%s: %d", url, resp.StatusCode)
 		time.Sleep(time.Duration(rand.Intn(30)) * time.Second)
 		return post(url, jsonData)
-	} else {
-		body, _ := ioutil.ReadAll(resp.Body)
-		return string(body)
 	}
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	return string(body)
 }
 
 func processTask(action *Action) {
 	// TODO:
 	// 2. Find the correct number of zonds with the same destination parameter as in main task
+	// TODO: replace with make()
 	var tasks []Task
+	for i := 0; i < int(action.Count); i++ {
+		// TODO find zond uuid
+		u, _ := uuid.NewV4()
+		var UUID = u.String()
+		var msec = time.Now().Unix()
+		tasks = append(tasks, Task{ZondUUID: UUID, Created: msec, UUID: UUID})
+	}
 
 	// 5. Wait for a while (timeout/deadline from the main task)
 	select {
@@ -214,10 +223,6 @@ func processTask(action *Action) {
 
 	// 3. Create a subtask for each zond (+ set uuid of the main task)
 	for _, task := range tasks {
-		u, _ := uuid.NewV4()
-		var Uuid = u.String()
-		var msec = time.Now().Unix()
-
 		newAction := Action{
 			Action:     action.Action,
 			ZondUUID:   task.ZondUUID,
@@ -226,14 +231,14 @@ func processTask(action *Action) {
 			Type:       "task",
 			Param:      action.Param,
 			ParentUUID: action.UUID,
-			Created:    msec,
-			UUID:       Uuid,
+			Created:    task.Created,
+			UUID:       task.UUID,
 		}
 		js, _ := json.Marshal(newAction)
 
-		ccredis.Client.SAdd("tasks-new", Uuid)
-		ccredis.Client.SAdd("tasks/measurement/"+action.UUID, Uuid)
-		ccredis.Client.Set("task/"+Uuid, string(js), time.Duration(action.TimeOut+300)) // subtask ttl is 5 minutes
+		ccredis.Client.SAdd("tasks-new", task.UUID)
+		ccredis.Client.SAdd("tasks/measurement/"+action.UUID, task.UUID)
+		ccredis.Client.Set("task/"+task.UUID, string(js), time.Duration(action.TimeOut+300)) // subtask ttl is 5 minutes
 
 		// 4. Send posts to pubsub with task metadata
 		go post("http://127.0.0.1:80/pub/zond:"+task.ZondUUID, string(js))
@@ -252,15 +257,12 @@ func finishTask(action *Action) {
 		return
 	}
 
-	// TODO:
-	// 6. Delete / Hide / Mark Unfinished Jobs
-
 	// 7. Make a calculation with data from the completed tasks
 	var result = 0
 	tasks, _ := ccredis.Client.SMembers("tasks/measurement/" + action.UUID).Result()
 	if len(tasks) > 0 {
-		for _, taskUuid := range tasks {
-			tp, _ := ccredis.Client.Get("task/" + taskUuid).Result()
+		for _, taskUUID := range tasks {
+			tp, _ := ccredis.Client.Get("task/" + taskUUID).Result()
 			var subtask Action
 			err := json.Unmarshal([]byte(tp), &subtask)
 			if err != nil {
