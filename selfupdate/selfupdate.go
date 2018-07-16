@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"../utils"
+	"github.com/ad/gomngr/utils"
 	"github.com/blang/semver"
 	"github.com/rhysd/go-github-selfupdate/selfupdate"
 )
