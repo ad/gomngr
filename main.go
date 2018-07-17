@@ -23,7 +23,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 )
 
-const version = "0.0.6"
+const version = "0.0.7"
 
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
@@ -141,19 +141,21 @@ func main() {
 				err := json.Unmarshal([]byte(res), &action)
 				if err != nil {
 					log.Println(err.Error())
-				}
-
-				taskjson, _ := ccredis.Client.Get("task/" + action.ParentUUID).Result()
-				var task Action
-				err = json.Unmarshal([]byte(taskjson), &task)
-				if err != nil {
-					log.Println(err.Error())
-				}
-				if task.Result != "" {
-					// if all subtasks finished — call finishTask
-					finishTask(&action)
 				} else {
-					// tasksCount, _ := client.SCard("tasks/measurement/"+action.ParentUUID).Result()
+					result, _ := ccredis.Client.Incr("tasks/measurement/count/" + action.ParentUUID).Result()
+					ccredis.Client.Expire("tasks/measurement/count/"+action.ParentUUID, 600*time.Second)
+
+					taskjson, _ := ccredis.Client.Get("task/" + action.ParentUUID).Result()
+					var task Action
+					err = json.Unmarshal([]byte(taskjson), &task)
+					if err != nil {
+						log.Println(err.Error())
+					} else if task.Result != "" || result >= task.Count {
+						// if all subtasks finished — call finishTask
+						finishTask(&action)
+					} else {
+						// tasksCount, _ := client.SCard("tasks/measurement/"+action.ParentUUID).Result()
+					}
 				}
 			}
 		}
