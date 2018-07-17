@@ -23,7 +23,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 )
 
-const version = "0.0.8"
+const version = "0.0.9"
 
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
@@ -142,6 +142,8 @@ func main() {
 				if err != nil {
 					log.Println(err.Error())
 				} else {
+					ccredis.Client.SRem("tasks-new", action.UUID)
+
 					result, _ := ccredis.Client.Incr("tasks/measurement/count/" + action.ParentUUID).Result()
 					ccredis.Client.Expire("tasks/measurement/count/"+action.ParentUUID, 600*time.Second)
 
