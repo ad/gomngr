@@ -23,7 +23,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 )
 
-const version = "0.0.5"
+const version = "0.0.6"
 
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
