@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ad/gocc/ccredis"
@@ -270,7 +271,9 @@ func finishTask(action *Action) {
 					log.Println(err.Error())
 				} else if subtask.Result != "" {
 					// make calculation
-					result += subtask.Result + "\n"
+					if !strings.HasPrefix(result, subtask.Result) && !strings.HasSuffix(strings.Trim(result, "\n"), subtask.Result) {
+						result += subtask.Result + "\n"
+					}
 				}
 			}
 		}
