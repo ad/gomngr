@@ -23,7 +23,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 )
 
-const version = "0.0.7"
+const version = "0.0.8"
 
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
@@ -232,6 +232,7 @@ func processTask(action *Action) {
 
 		ccredis.Client.SAdd("tasks-new", UUID)
 		ccredis.Client.SAdd("tasks/measurement/"+action.UUID, UUID)
+		ccredis.Client.Expire("tasks/measurement/"+action.UUID, time.Duration(action.TimeOut+300)*time.Second)
 		ccredis.Client.Set("task/"+UUID, string(js), time.Duration(action.TimeOut+300)*time.Second) // subtask ttl is 5 minutes
 
 		// 4. Send posts to pubsub with task metadata
