@@ -22,7 +22,7 @@ import (
 	"github.com/nu7hatch/gouuid"
 )
 
-const version = "0.0.4"
+const version = "0.0.5"
 
 var mu, _ = uuid.NewV4()
 var addr = flag.String("addr", "localhost:80", "cc address:port")
@@ -151,6 +151,8 @@ func main() {
 				if task.Result != "" {
 					// if all subtasks finished — call finishTask
 					finishTask(&action)
+				} else {
+					// tasksCount, _ := client.SCard("tasks/measurement/"+action.ParentUUID).Result()
 				}
 			}
 		}
@@ -259,7 +261,6 @@ func finishTask(action *Action) {
 		if action.Action == "ping" {
 			result = processPing(action, tasks)
 		} else {
-
 			for _, taskUUID := range tasks {
 				tp, _ := ccredis.Client.Get("task/" + taskUUID).Result()
 				var subtask Action
