@@ -12,11 +12,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
+	"github.com/ad/gocc/ccredis"
 	"github.com/ad/gomngr/selfupdate"
 	"github.com/ad/gomngr/utils"
-	"github.com/ad/gocc/ccredis"
 	"github.com/gorilla/websocket"
 	"github.com/nu7hatch/gouuid"
 )
@@ -255,16 +256,21 @@ func finishTask(action *Action) {
 	var result = ""
 	tasks, _ := ccredis.Client.SMembers("tasks/measurement/" + action.UUID).Result()
 	if len(tasks) > 0 {
-		for _, taskUUID := range tasks {
-			tp, _ := ccredis.Client.Get("task/" + taskUUID).Result()
-			var subtask Action
-			err := json.Unmarshal([]byte(tp), &subtask)
-			if err != nil {
-				log.Println(err.Error())
-			} else if subtask.Result != "" {
-				// TODO
-				// make calculation
-				result += subtask.Result + "\n"
+		if action.Action == "ping" {
+			result = processPing(action, tasks)
+		} else {
+
+			for _, taskUUID := range tasks {
+				tp, _ := ccredis.Client.Get("task/" + taskUUID).Result()
+				var subtask Action
+				err := json.Unmarshal([]byte(tp), &subtask)
+				if err != nil {
+					log.Println(err.Error())
+				} else if subtask.Result != "" {
+					// TODO
+					// make calculation
+					result += subtask.Result + "\n"
+				}
 			}
 		}
 	}
@@ -274,4 +280,38 @@ func finishTask(action *Action) {
 	resultjson, _ := json.Marshal(resultAction)
 
 	post("http://"+*addr+"/mngr/task/result", string(resultjson))
+}
+
+func processPing(action *Action, tasks []string) (result string) {
+	// var result = ""
+	var validCount int
+	var validSumm time.Duration
+	for _, taskUUID := range tasks {
+		tp, _ := ccredis.Client.Get("task/" + taskUUID).Result()
+		var subtask Action
+		err := json.Unmarshal([]byte(tp), &subtask)
+		if err != nil {
+			log.Println(err.Error())
+		} else if subtask.Result != "" {
+			// TODO
+			// make calculation
+			// result += subtask.Result + "\n"
+			t, err := time.ParseDuration(subtask.Result)
+			if err != nil {
+
+			} else {
+				validCount++
+				validSumm += t
+			}
+		}
+	}
+	if validCount == 0 {
+		result = "All failed"
+	} else {
+		result = (time.Duration(validSumm.Nanoseconds()/int64(validCount)) * time.Nanosecond).String()
+		if validCount != len(tasks) {
+			result += ", " + strconv.FormatInt(int64(len(tasks)-validCount), 10) + " failed"
+		}
+	}
+	return result
 }
