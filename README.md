@@ -5,7 +5,7 @@ Part of [gocc](https://github.com/ad/gocc), is responsible for creating measurem
 Only for tasks with type "measurement".
 
 
-# TODO
+# Steps
 1. Block task
 2. Find the correct number of zonds with the same destination parameter as in main task
 3. Create a subtask for each zond (+ set uuid of the main task)

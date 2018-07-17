@@ -259,6 +259,7 @@ func finishTask(action *Action) {
 	tasks, _ := ccredis.Client.SMembers("tasks/measurement/" + action.UUID).Result()
 	if len(tasks) > 0 {
 		if action.Action == "ping" {
+			// make calculation
 			result = processPing(action, tasks)
 		} else {
 			for _, taskUUID := range tasks {
@@ -268,7 +269,6 @@ func finishTask(action *Action) {
 				if err != nil {
 					log.Println(err.Error())
 				} else if subtask.Result != "" {
-					// TODO
 					// make calculation
 					result += subtask.Result + "\n"
 				}
@@ -284,7 +284,6 @@ func finishTask(action *Action) {
 }
 
 func processPing(action *Action, tasks []string) (result string) {
-	// var result = ""
 	var validCount int
 	var validSumm time.Duration
 	for _, taskUUID := range tasks {
@@ -294,9 +293,6 @@ func processPing(action *Action, tasks []string) (result string) {
 		if err != nil {
 			log.Println(err.Error())
 		} else if subtask.Result != "" {
-			// TODO
-			// make calculation
-			// result += subtask.Result + "\n"
 			t, err := time.ParseDuration(subtask.Result)
 			if err != nil {
 
